@@ -1,0 +1,158 @@
+services:
+  mongodb:
+    image: mongo:6
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  minio:
+    image: quay.io/minio/minio:latest
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+
+  minio-setup:
+    image: quay.io/minio/mc:latest
+    restart: "no"
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until (/usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin); do echo 'Waiting for MinIO...'; sleep 1; done;
+      /usr/bin/mc mb myminio/research-papers || true;
+      /usr/bin/mc anonymous set public myminio/research-papers || true;
+      exit 0;
+      "
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - AUTH_SERVICE_URL=http://auth-service:3001
+      - PAPER_SERVICE_URL=http://paper-service:3002
+      - SEARCH_REC_SERVICE_URL=http://search-recommendation-service:3003
+      - PDF_SERVICE_URL=http://pdf-service:8001
+      - AI_SERVICE_URL=http://ai-service:8002
+      - FRONTEND_URL=http://localhost:5173
+    depends_on:
+      - auth-service
+      - paper-service
+      - search-recommendation-service
+      - pdf-service
+      - ai-service
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - MONGODB_URI=mongodb://mongodb:27017/research-platform
+      - JWT_SECRET=your-super-secret-jwt-key-change-this
+      - JWT_EXPIRES_IN=7d
+    depends_on:
+      - mongodb
+
+  paper-service:
+    build:
+      context: .
+      dockerfile: services/paper-service/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+      - MONGODB_URI=mongodb://mongodb:27017/research-platform
+      - JWT_SECRET=your-super-secret-jwt-key-change-this
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=research-papers
+      - PDF_SERVICE_URL=http://pdf-service:8001
+      - AI_SERVICE_URL=http://ai-service:8002
+    depends_on:
+      - mongodb
+      - minio
+
+  search-recommendation-service:
+    build:
+      context: .
+      dockerfile: services/search-recommendation-service/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=development
+      - PORT=3003
+      - MONGODB_URI=mongodb://mongodb:27017/research-platform
+      - JWT_SECRET=your-super-secret-jwt-key-change-this
+    depends_on:
+      - mongodb
+
+  pdf-service:
+    build:
+      context: .
+      dockerfile: services/pdf-service/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - MINIO_ENDPOINT=minio
+      - MINIO_PORT=9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - MINIO_BUCKET=research-papers
+      - PAPER_SERVICE_URL=http://paper-service:3002
+      - AI_SERVICE_URL=http://ai-service:8002
+    depends_on:
+      - minio
+      - paper-service
+
+  ai-service:
+    build:
+      context: .
+      dockerfile: services/ai-service/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      - PAPER_SERVICE_URL=http://paper-service:3002
+      - AI_API_KEY=${AI_API_KEY:-}
+      - AI_BASE_URL=${AI_BASE_URL:-https://api.openai.com/v1}
+      - AI_MODEL=${AI_MODEL:-gpt-4o-mini}
+    depends_on:
+      - paper-service
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3000/api
+
+volumes:
+  mongo-data:
+  minio-data:

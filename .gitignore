@@ -1,0 +1,66 @@
+﻿# Dependencies
+node_modules/
+**/node_modules/
+venv/
+**/venv/
+env/
+**/env/
+.venv/
+**/.venv/
+
+# Python Cache & Artifacts
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+**/.pytest_cache/
+
+# Environment and Secrets (CRITICAL: Never commit real secrets)
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+!.env.example
+
+# Build Outputs
+dist/
+**/dist/
+build/
+**/build/
+*.egg-info/
+
+# Coverage & Test Logs
+coverage/
+**/coverage/
+htmlcov/
+.coverage
+.coverage.*
+
+# IDE & OS Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Docker Local Overrides
+docker-compose.override.yml
+
+# Temporary Test PDFs
+malformed_*.pdf
+sample_cnad_*.pdf
+test_*.pdf
+
+# Archives
+*.tgz
+*.tar.gz
