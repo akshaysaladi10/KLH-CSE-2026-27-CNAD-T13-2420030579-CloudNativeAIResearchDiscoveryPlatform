@@ -18,6 +18,7 @@ import {
 export default function Upload() {
   const [activeTab, setActiveTab] = useState('pdf'); // 'pdf' | 'abstract'
   const [file, setFile] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [title, setTitle] = useState('');
   const [authors, setAuthors] = useState('');
   const [abstract, setAbstract] = useState('');
@@ -27,6 +28,33 @@ export default function Upload() {
   const [uploadStep, setUploadStep] = useState(0); // 0: Idle, 1: Submitting, 2: Parsing/Extracting, 3: Completed
   const [error, setError] = useState('');
   const navigate = useNavigate();
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const droppedFile = e.dataTransfer.files[0];
+      if (droppedFile.type === 'application/pdf' || droppedFile.name.toLowerCase().endsWith('.pdf')) {
+        setFile(droppedFile);
+        setError('');
+      } else {
+        setError('Only PDF documents are supported (.pdf).');
+      }
+    }
+  };
 
   const domainOptions = [
     'Cloud Computing',
@@ -274,22 +302,49 @@ export default function Upload() {
           {/* PDF File Drag and Drop / Input */}
           <div>
             <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-              Select PDF Document *
+              Select or Drop PDF Document *
             </label>
-            <div className="border-2 border-dashed border-slate-700 hover:border-indigo-500 rounded-2xl p-6 text-center bg-slate-900/60 hover:bg-slate-900 transition cursor-pointer">
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-2xl p-8 text-center transition cursor-pointer relative ${
+                isDragging
+                  ? 'border-indigo-400 bg-indigo-950/40 shadow-lg shadow-indigo-500/20'
+                  : 'border-slate-700 hover:border-indigo-500/70 bg-slate-900/60 hover:bg-slate-900'
+              }`}
+            >
+              <div className="flex flex-col items-center justify-center space-y-2 pointer-events-none">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition ${isDragging ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-indigo-400'}`}>
+                  <UploadCloud className="w-6 h-6 animate-pulse" />
+                </div>
+                <p className="text-sm font-semibold text-slate-200">
+                  {isDragging ? 'Drop your research paper here' : 'Drag & drop your PDF file here, or browse'}
+                </p>
+                <p className="text-xs text-slate-500">
+                  Supports scientific research papers up to 50MB (.pdf)
+                </p>
+              </div>
+
               <input
                 type="file"
                 accept=".pdf,application/pdf"
-                required
+                required={!file}
                 disabled={loading}
-                onChange={(e) => setFile(e.target.files[0] || null)}
-                className="w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    setFile(e.target.files[0]);
+                    setError('');
+                  }
+                }}
+                className="mt-4 block mx-auto text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
               />
+
               {file && (
-                <p className="mt-3 text-xs text-indigo-400 font-semibold flex items-center justify-center space-x-1">
-                  <FileText className="w-4 h-4" />
-                  <span>Selected: {file.name} ({(file.size / (1024 * 1024)).toFixed(2)} MB)</span>
-                </p>
+                <div className="mt-4 p-3 bg-indigo-950/60 border border-indigo-800/80 rounded-xl text-xs text-indigo-300 font-semibold flex items-center justify-center space-x-2">
+                  <FileText className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                  <span className="truncate">Selected: {file.name} ({(file.size / (1024 * 1024)).toFixed(2)} MB)</span>
+                </div>
               )}
             </div>
           </div>

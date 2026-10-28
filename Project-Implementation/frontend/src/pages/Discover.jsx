@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import {
   Search,
   Globe,
   Database,
   Bookmark,
+  BookmarkCheck,
   ExternalLink,
   BookOpen,
   Calendar,
@@ -18,13 +19,28 @@ import {
   FileEdit,
   Tag,
   Info,
+  FolderPlus,
+  Quote,
+  GitCompare,
+  SlidersHorizontal,
 } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
+import CitationModal from '../components/CitationModal';
+import AddToCollectionModal from '../components/AddToCollectionModal';
 
 export default function Discover() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialQuery = searchParams.get('q') || 'cloud computing microservices';
+  const { showToast } = useToast();
+
   const [searchMode, setSearchMode] = useState('topic'); // 'topic' | 'abstract'
-  const [query, setQuery] = useState('cloud computing microservices');
+  const [query, setQuery] = useState(initialQuery);
   const [abstractText, setAbstractText] = useState('');
   const [source, setSource] = useState('openalex'); // 'openalex' | 'local'
+  const [yearFilter, setYearFilter] = useState('all');
+  const [domainFilter, setDomainFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('relevance');
+
   const [papers, setPapers] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -32,7 +48,24 @@ export default function Discover() {
   const [notice, setNotice] = useState('');
   const [importingId, setImportingId] = useState(null);
   const [importedMap, setImportedMap] = useState({});
-  const [extractedKeywords, setExtractedKeywords] = useState([]);
+  const [bookmarkedIds, setBookmarkedIds] = useState(new Set());
+
+  // Modal states
+  const [modalPaper, setModalPaper] = useState(null);
+  const [showCitationModal, setShowCitationModal] = useState(false);
+  const [showCollectionModal, setShowCollectionModal] = useState(false);
+
+  // Load existing bookmarks
+  useEffect(() => {
+    api.get('/library/bookmarks')
+      .then((res) => {
+        if (res.data?.success) {
+          const ids = new Set((res.data.data.bookmarks || []).map((b) => b.paperId?._id || b.paperId));
+          setBookmarkedIds(ids);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
@@ -41,8 +74,12 @@ export default function Discover() {
     setLoading(true);
     setError('');
     setNotice('');
+    setSearchParams({ q: query.trim() });
+
     try {
-      const res = await api.get(`/search?q=${encodeURIComponent(query)}&source=${source}&perPage=12`);
+      const res = await api.get(
+        `/search?q=${encodeURIComponent(query.trim())}&source=${source}&perPage=12`
+      );
       if (res.data.success) {
         setPapers(res.data.data.papers || []);
         setTotal(res.data.data.total || 0);
@@ -55,7 +92,7 @@ export default function Discover() {
       setError(
         err.response?.data?.error?.message ||
           (source === 'openalex'
-            ? 'OpenAlex external research API is temporarily unreachable. Try switching to Local Library.'
+            ? 'OpenAlex external API is temporarily unreachable. Displaying local library results.'
             : 'Search failed. Please try again.')
       );
     } finally {
@@ -89,7 +126,6 @@ export default function Discover() {
         }));
         setPapers(flatPapers);
         setTotal(flatPapers.length);
-        setExtractedKeywords(res.data.data.extractedKeywords || []);
       }
     } catch (err) {
       console.error('Abstract discovery failed:', err);
@@ -105,50 +141,112 @@ export default function Discover() {
     }
   }, [source, searchMode]);
 
+  const handleBookmarkToggle = async (paper) => {
+    const paperId = paper._id || paper.id;
+    try {
+      // If external OpenAlex paper, import first
+      let targetId = paperId;
+      if (!/^[0-9a-fA-F]{24}$/.test(paperId)) {
+        const impRes = await api.post('/search/import', paper);
+        if (impRes.data?.data?.paper?._id) {
+          targetId = impRes.data.data.paper._id;
+        }
+      }
+
+      if (bookmarkedIds.has(targetId)) {
+        await api.delete(`/library/bookmarks/${targetId}`);
+        setBookmarkedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(targetId);
+          return next;
+        });
+        showToast('Removed from bookmarks', 'info');
+      } else {
+        await api.post('/library/bookmarks', { paperId: targetId });
+        setBookmarkedIds((prev) => new Set([...prev, targetId]));
+        showToast('Saved to your research library!', 'success');
+      }
+    } catch (err) {
+      showToast('Could not update bookmark', 'error');
+    }
+  };
+
+  const handleOpenCitation = (paper) => {
+    setModalPaper(paper);
+    setShowCitationModal(true);
+  };
+
+  const handleOpenCollection = (paper) => {
+    setModalPaper(paper);
+    setShowCollectionModal(true);
+  };
+
   const handleImport = async (paper) => {
     const key = paper.externalId || paper.title;
     setImportingId(key);
     try {
-      const res = await api.post('/search/import', {
-        title: paper.title,
-        authors: paper.authors,
-        abstract: paper.abstract,
-        publicationYear: paper.publicationYear,
-        journal: paper.journal,
-        doi: paper.doi,
-        keywords: paper.keywords,
-        externalId: paper.externalId,
-        pdfUrl: paper.pdfUrl,
-        citationCount: paper.citationCount,
-        researchDomain: paper.researchDomain || 'Computer Science',
-      });
+      const res = await api.post('/search/import', paper);
       if (res.data.success) {
-        setImportedMap((prev) => ({
-          ...prev,
-          [key]: res.data.data.paper._id,
-        }));
+        const newId = res.data.data.paper._id;
+        setImportedMap((prev) => ({ ...prev, [key]: newId }));
+        showToast('Imported into library catalog!', 'success');
       }
     } catch (err) {
-      alert(err.response?.data?.error?.message || 'Failed to import paper into platform library.');
+      showToast(err.response?.data?.error?.message || 'Failed to import paper.', 'error');
     } finally {
       setImportingId(null);
     }
   };
 
+  const trendingQueries = [
+    'Kubernetes predictive autoscaling',
+    'Distributed Raft consensus',
+    'eBPF microservice telemetry',
+    'Graph neural networks recommendation',
+    'Zero-trust cloud architecture',
+    'Serverless cold-start latency',
+  ];
+
+  // Client-side filtering & sorting
+  const filteredPapers = papers
+    .filter((p) => {
+      if (yearFilter !== 'all') {
+        const y = parseInt(yearFilter);
+        if (y === 2020) {
+          if ((p.publicationYear || 0) < 2020) return false;
+        } else if (p.publicationYear !== y) {
+          return false;
+        }
+      }
+      if (domainFilter !== 'all') {
+        if ((p.researchDomain || '').toLowerCase() !== domainFilter.toLowerCase()) return false;
+      }
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'newest') {
+        return (b.publicationYear || 0) - (a.publicationYear || 0);
+      }
+      if (sortBy === 'citations') {
+        return (b.citationCount || 0) - (a.citationCount || 0);
+      }
+      return 0; // relevance
+    });
+
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6 pb-20">
       {/* Header Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-indigo-900/50 p-8 shadow-xl">
-        <div className="relative z-10 max-w-3xl">
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-400/30 text-indigo-300 text-xs font-semibold mb-3">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-indigo-950/70 to-slate-950 border border-slate-800 p-8 shadow-2xl">
+        <div className="max-w-3xl space-y-2">
+          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-400/30 text-indigo-300 text-xs font-semibold">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Global Scientific Literature Discovery</span>
+            <span>Global Academic Literature Search</span>
           </div>
-          <h1 className="text-3xl font-extrabold text-white tracking-tight">
-            Discover Research Papers
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+            Discover Scientific Research
           </h1>
-          <p className="text-slate-300 text-sm mt-2 leading-relaxed">
-            Search across millions of verified academic publications via the live <strong className="text-indigo-400">OpenAlex API</strong>, explore indexed platform papers, or discover research by abstract context.
+          <p className="text-slate-400 text-sm leading-relaxed">
+            Query over 250M+ scholarly publications via the live <strong className="text-indigo-400">OpenAlex API</strong>, search your local cluster repository, or discover literature by abstract semantic context.
           </p>
         </div>
       </div>
@@ -189,25 +287,25 @@ export default function Discover() {
       </div>
 
       {/* Search Input Section */}
-      <div className="bg-slate-950/80 p-5 rounded-2xl border border-slate-800 space-y-4 shadow-lg">
+      <div className="bg-slate-950/80 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
         {searchMode === 'topic' ? (
           <>
-            <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3">
+            <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-400 w-5 h-5 pointer-events-none" />
                 <input
                   type="text"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search by topic, paper title, keywords, or authors..."
-                  className="w-full pl-12 pr-4 py-3.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
+                  placeholder="Search by topic, paper title, keywords, authors, or DOI..."
+                  className="w-full pl-12 pr-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition shadow-md shadow-indigo-600/30 flex items-center justify-center space-x-2"
+                className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition shadow-md shadow-indigo-600/30 flex items-center justify-center space-x-2"
               >
                 {loading ? (
                   <>
@@ -223,237 +321,260 @@ export default function Discover() {
               </button>
             </form>
 
-            {/* Source Toggle Tabs */}
-            <div className="flex items-center justify-between border-t border-slate-800/80 pt-4 text-xs">
-              <div className="flex items-center space-x-2">
-                <span className="text-slate-400 font-medium">Search Catalog:</span>
+            {/* Trending Query Chips */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="text-[11px] font-semibold text-slate-500">Trending Topics:</span>
+              {trendingQueries.map((tq, i) => (
                 <button
+                  key={i}
+                  type="button"
+                  onClick={() => {
+                    setQuery(tq);
+                    setSearchParams({ q: tq });
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 hover:border-indigo-500/40 text-[11px] text-slate-300 hover:text-indigo-300 transition"
+                >
+                  {tq}
+                </button>
+              ))}
+            </div>
+
+            {/* Source & Filter Controls Bar */}
+            <div className="pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center space-x-2">
+                <span className="text-slate-400 font-semibold">Source:</span>
+                <button
+                  type="button"
                   onClick={() => setSource('openalex')}
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg font-semibold transition ${
+                  className={`px-3 py-1.5 rounded-xl font-semibold flex items-center space-x-1.5 transition ${
                     source === 'openalex'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   <Globe className="w-3.5 h-3.5" />
-                  <span>OpenAlex (Global Works)</span>
+                  <span>OpenAlex (Global 250M+)</span>
                 </button>
                 <button
+                  type="button"
                   onClick={() => setSource('local')}
-                  className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg font-semibold transition ${
+                  className={`px-3 py-1.5 rounded-xl font-semibold flex items-center space-x-1.5 transition ${
                     source === 'local'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800'
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200'
                   }`}
                 >
                   <Database className="w-3.5 h-3.5" />
-                  <span>Platform Library (Local)</span>
+                  <span>Local Library Database</span>
                 </button>
               </div>
 
-              <div className="text-slate-400 hidden sm:block">
-                {total > 0 && <span>Found ~{total.toLocaleString()} publications</span>}
+              {/* Year & Sort Filters */}
+              <div className="flex items-center space-x-2">
+                <select
+                  value={yearFilter}
+                  onChange={(e) => setYearFilter(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-300 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="all">All Years</option>
+                  <option value="2026">2026</option>
+                  <option value="2025">2025</option>
+                  <option value="2024">2024</option>
+                  <option value="2023">2023</option>
+                  <option value="2020">2020 & Newer</option>
+                </select>
+
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-slate-300 focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="relevance">Sort: Relevance</option>
+                  <option value="newest">Sort: Newest</option>
+                  <option value="citations">Sort: Most Cited</option>
+                </select>
               </div>
             </div>
           </>
         ) : (
-          /* Abstract Contextual Discovery Form */
-          <form onSubmit={handleAbstractDiscover} className="space-y-4">
+          /* Abstract Contextual Discovery Mode */
+          <form onSubmit={handleAbstractDiscover} className="space-y-3">
             <div>
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">
-                Paste Research Abstract or Problem Statement
+              <label className="text-xs font-semibold text-slate-300 block mb-1">
+                Paste Research Abstract or Problem Statement:
               </label>
               <textarea
-                rows={4}
-                required
+                rows={5}
                 value={abstractText}
                 onChange={(e) => setAbstractText(e.target.value)}
-                placeholder="Paste an abstract or research problem statement to automatically extract key concepts and retrieve relevant scientific literature..."
-                className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-500 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 transition leading-relaxed"
+                placeholder="In cloud-native computing, containerized microservices face severe tail latency degradation under dynamic traffic spikes..."
+                className="w-full p-4 bg-slate-900 border border-slate-700 rounded-xl text-slate-100 placeholder-slate-500 text-xs font-mono leading-relaxed focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
 
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              {extractedKeywords.length > 0 && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs text-slate-400 font-semibold mr-1">Extracted Concepts:</span>
-                  {extractedKeywords.map((kw, i) => (
-                    <span key={i} className="px-2 py-0.5 rounded-md bg-indigo-900/50 text-indigo-300 text-[11px] border border-indigo-700/40">
-                      #{kw}
-                    </span>
-                  ))}
-                </div>
-              )}
-
+            <div className="flex justify-end">
               <button
                 type="submit"
                 disabled={loading || !abstractText.trim()}
-                className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition shadow-md shadow-indigo-600/30 flex items-center justify-center space-x-2 ml-auto"
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-xl text-xs font-semibold flex items-center space-x-2 transition shadow-md shadow-indigo-600/30"
               >
-                {loading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Analyzing & Matching...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>Find Contextual Research Papers</span>
-                  </>
-                )}
+                <Sparkles className="w-4 h-4" />
+                <span>Discover Matching Literature</span>
               </button>
             </div>
           </form>
         )}
       </div>
 
-      {/* Fallback Notice */}
+      {/* Notifications & Fallback Notice */}
       {notice && (
-        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center space-x-3">
-          <Info className="w-4 h-4 flex-shrink-0 text-amber-400" />
+        <div className="p-4 rounded-2xl bg-indigo-950/40 border border-indigo-800/60 text-xs text-indigo-300 flex items-center space-x-2">
+          <Info className="w-4 h-4 text-indigo-400 flex-shrink-0" />
           <span>{notice}</span>
         </div>
       )}
 
-      {/* Error Message */}
       {error && (
-        <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center space-x-3">
-          <AlertCircle className="w-4 h-4 flex-shrink-0 text-rose-400" />
+        <div className="p-4 rounded-2xl bg-rose-950/40 border border-rose-800/60 text-xs text-rose-300 flex items-center space-x-2">
+          <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Results Grid */}
-      {loading ? (
-        <div className="py-20 text-center space-y-3">
-          <div className="w-10 h-10 border-3 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin mx-auto" />
-          <p className="text-slate-400 text-sm">
-            {searchMode === 'abstract'
-              ? 'Analyzing abstract semantics & discovering relevant research...'
-              : source === 'openalex'
-              ? 'Querying OpenAlex scientific knowledge graph...'
-              : 'Searching local MongoDB repository...'}
-          </p>
+      {/* Results Header */}
+      {!loading && filteredPapers.length > 0 && (
+        <div className="flex items-center justify-between text-xs text-slate-400 font-semibold px-1">
+          <span>Found {filteredPapers.length} publications (Total indexed: {total.toLocaleString()})</span>
         </div>
-      ) : papers.length === 0 ? (
-        <div className="py-20 text-center bg-slate-950/40 rounded-2xl border border-slate-800 p-8">
-          <BookOpen className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-          <h3 className="text-lg font-bold text-slate-300">No research papers found</h3>
-          <p className="text-slate-500 text-sm mt-1 max-w-md mx-auto">
-            {searchMode === 'abstract'
-              ? 'Paste a longer abstract or one with more specific technical terms to find related publications.'
-              : 'Try a different search query such as "machine learning", "cloud native", "kubernetes", or switch catalogs.'}
-          </p>
+      )}
+
+      {/* Results Cards Grid */}
+      {loading ? (
+        <div className="py-24 text-center space-y-3">
+          <div className="w-10 h-10 border-3 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mx-auto" />
+          <p className="text-slate-400 text-sm">Querying scholarly graph & calculating similarity metrics...</p>
+        </div>
+      ) : filteredPapers.length === 0 ? (
+        <div className="py-16 text-center text-slate-500 text-xs bg-slate-950/40 rounded-2xl border border-slate-800 p-8 space-y-3">
+          <BookOpen className="w-10 h-10 text-slate-600 mx-auto" />
+          <p className="text-sm font-semibold text-slate-300">No Research Papers Found</p>
+          <p>Try refining your search terms or toggling between OpenAlex and Local Library.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {papers.map((paper, index) => {
-            const paperId = paper._id || paper.id;
+          {filteredPapers.map((paper, idx) => {
+            const paperId = paper._id || paper.id || `p_${idx}`;
             const key = paper.externalId || paper.title;
-            const isImported = importedMap[key] || (source === 'local' || paper.source === 'upload' || paper.source === 'abstract' ? paperId : null);
+            const importedId = importedMap[key];
+            const isBookmarked = bookmarkedIds.has(importedId || paperId);
 
             return (
               <div
-                key={paperId || index}
-                className="bg-slate-950/70 border border-slate-800 rounded-2xl p-6 flex flex-col justify-between hover:border-indigo-500/50 hover:shadow-xl hover:shadow-indigo-500/5 transition group"
+                key={paperId}
+                className="bg-slate-950/70 border border-slate-800 rounded-2xl p-5 shadow-xl hover:border-indigo-500/50 transition flex flex-col justify-between group space-y-4"
               >
-                <div>
-                  {/* Metadata Header */}
-                  <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
-                    <span className="flex items-center space-x-1 font-semibold text-indigo-400">
-                      <Calendar className="w-3.5 h-3.5" />
-                      <span>{paper.publicationYear || 'Recent'}</span>
+                <div className="space-y-3">
+                  {/* Top badges */}
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span className="text-indigo-400 font-semibold bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20 truncate max-w-[160px]">
+                      {paper.researchDomain || 'Computer Science'}
                     </span>
-                    {paper.similarityScore !== undefined ? (
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold">
-                        Score: {Math.round(paper.similarityScore * 100)}%
-                      </span>
-                    ) : paper.citationCount !== undefined ? (
-                      <span className="flex items-center space-x-1 text-slate-400">
-                        <Award className="w-3.5 h-3.5 text-amber-400" />
-                        <span>{paper.citationCount} citations</span>
-                      </span>
-                    ) : null}
+                    <span className="font-medium">{paper.publicationYear || 'Recent'}</span>
                   </div>
 
                   {/* Title */}
-                  <h3 className="text-base font-bold text-slate-100 group-hover:text-indigo-400 transition line-clamp-2 mb-2 leading-snug">
+                  <h3 className="text-sm font-bold text-slate-100 group-hover:text-indigo-300 transition line-clamp-2 leading-snug">
                     {paper.title}
                   </h3>
 
-                  {/* Authors */}
-                  <p className="text-xs text-slate-400 mb-3 line-clamp-1">
-                    {Array.isArray(paper.authors) && paper.authors.length > 0
-                      ? paper.authors.map((a) => (typeof a === 'string' ? a : a.name)).join(', ')
-                      : 'Unknown Authors'}
-                  </p>
+                  {/* Authors & Source */}
+                  <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-1.5">
+                    <span>
+                      {(paper.authors || []).map((a) => (typeof a === 'string' ? a : a.name)).slice(0, 2).join(', ')}
+                    </span>
+                    {paper.journal && <span>• {paper.journal}</span>}
+                    {paper.citationCount > 0 && (
+                      <span className="text-emerald-400">• {paper.citationCount} cites</span>
+                    )}
+                  </div>
 
-                  {/* Match Reason if abstract recommendation */}
-                  {paper.matchReason && (
-                    <div className="mb-2 text-[11px] text-cyan-400 bg-cyan-950/30 border border-cyan-800/40 px-2.5 py-1 rounded-lg">
-                      {paper.matchReason}
-                    </div>
-                  )}
-
-                  {/* Abstract snippet */}
-                  <p className="text-xs text-slate-300 line-clamp-3 mb-4 leading-relaxed bg-slate-900/50 p-3 rounded-xl border border-slate-800/60">
-                    {paper.abstract || 'No abstract preview available for this publication.'}
+                  {/* Abstract Snippet */}
+                  <p className="text-xs text-slate-400 line-clamp-3 leading-relaxed">
+                    {paper.abstract || 'No abstract text available in record.'}
                   </p>
 
                   {/* Keywords */}
                   {Array.isArray(paper.keywords) && paper.keywords.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-4">
-                      {paper.keywords.slice(0, 3).map((kw, i) => (
-                        <span
-                          key={i}
-                          className="px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 text-slate-400 text-[11px]"
-                        >
-                          {kw}
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {paper.keywords.slice(0, 3).map((kw, ki) => (
+                        <span key={ki} className="text-[10px] bg-slate-900 text-slate-400 px-2 py-0.5 rounded border border-slate-800">
+                          #{kw}
                         </span>
                       ))}
                     </div>
                   )}
                 </div>
 
-                {/* Card Action Footer */}
-                <div className="border-t border-slate-800/80 pt-4 mt-2 flex items-center justify-between">
-                  {source === 'local' || isImported || paperId ? (
-                    <Link
-                      to={`/papers/${isImported || paperId}`}
-                      className="w-full py-2 px-3 rounded-xl bg-indigo-600/20 border border-indigo-500/40 text-indigo-300 hover:bg-indigo-600 hover:text-white text-xs font-semibold flex items-center justify-center space-x-1.5 transition"
+                {/* Card Quick Actions */}
+                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                  <div className="flex items-center space-x-1">
+                    <button
+                      type="button"
+                      onClick={() => handleBookmarkToggle(paper)}
+                      title={isBookmarked ? 'Remove Bookmark' : 'Save to Library'}
+                      className={`p-2 rounded-xl transition ${
+                        isBookmarked
+                          ? 'bg-amber-500/10 text-amber-400'
+                          : 'bg-slate-900 text-slate-400 hover:text-white hover:bg-slate-800'
+                      }`}
                     >
-                      <span>View Paper & AI Insights</span>
+                      {isBookmarked ? <BookmarkCheck className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCollection(paper)}
+                      title="Add to Collection"
+                      className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-indigo-400 hover:bg-slate-800 transition"
+                    >
+                      <FolderPlus className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCitation(paper)}
+                      title="Cite Paper"
+                      className="p-2 rounded-xl bg-slate-900 text-slate-400 hover:text-purple-400 hover:bg-slate-800 transition"
+                    >
+                      <Quote className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* View Details Link */}
+                  {importedId || (/^[0-9a-fA-F]{24}$/.test(paperId)) ? (
+                    <Link
+                      to={`/papers/${importedId || paperId}`}
+                      className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center space-x-1 transition shadow-sm"
+                    >
+                      <span>Examine</span>
                       <ArrowRight className="w-3.5 h-3.5" />
                     </Link>
                   ) : (
-                    <div className="flex items-center space-x-2 w-full">
-                      <button
-                        onClick={() => handleImport(paper)}
-                        disabled={importingId === key}
-                        className="flex-1 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center justify-center space-x-1.5 transition shadow"
-                      >
-                        {importingId === key ? (
-                          <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ) : (
-                          <>
-                            <Bookmark className="w-3.5 h-3.5" />
-                            <span>Save to Library</span>
-                          </>
-                        )}
-                      </button>
-
-                      {paper.doi && (
-                        <a
-                          href={`https://doi.org/${paper.doi}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          title="Open DOI Link"
-                          className="p-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 transition"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </a>
+                    <button
+                      type="button"
+                      disabled={importingId === key}
+                      onClick={() => handleImport(paper)}
+                      className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center space-x-1 transition"
+                    >
+                      {importingId === key ? (
+                        <span>Importing...</span>
+                      ) : (
+                        <>
+                          <span>Catalog Paper</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </>
                       )}
-                    </div>
+                    </button>
                   )}
                 </div>
               </div>
@@ -461,6 +582,20 @@ export default function Discover() {
           })}
         </div>
       )}
+
+      {/* Citation Modal */}
+      <CitationModal
+        paper={modalPaper}
+        isOpen={showCitationModal}
+        onClose={() => setShowCitationModal(false)}
+      />
+
+      {/* Add To Collection Modal */}
+      <AddToCollectionModal
+        paper={modalPaper}
+        isOpen={showCollectionModal}
+        onClose={() => setShowCollectionModal(false)}
+      />
     </div>
   );
 }

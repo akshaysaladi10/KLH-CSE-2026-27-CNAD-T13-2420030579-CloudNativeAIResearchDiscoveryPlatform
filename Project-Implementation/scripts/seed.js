@@ -92,9 +92,9 @@ const PaperAnalysis = mongoose.models.PaperAnalysis || mongoose.model('PaperAnal
 const Bookmark = mongoose.models.Bookmark || mongoose.model('Bookmark', BookmarkSchema);
 
 const connectDB = async () => {
-  let uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/research_platform';
+  let uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/research-platform';
   if (uri.includes('<cluster>') || uri.includes('<username>')) {
-    uri = 'mongodb://localhost:27017/research_platform';
+    uri = 'mongodb://localhost:27017/research-platform';
   }
   try {
     await mongoose.connect(uri);
@@ -112,7 +112,7 @@ const runSeed = async () => {
 
   // 1. Create or retrieve Demo User
   // Password is bcrypt hash for 'password123'
-  const bcrypt = require('bcryptjs');
+
   const salt = await bcrypt.genSalt(10);
   const passwordHash = await bcrypt.hash('password123', salt);
 
@@ -157,6 +157,27 @@ const runSeed = async () => {
           'Establish quantifiable metrics for inter-service dependency resilience and design an automated retry backoff algorithm.',
         methodology:
           'Chaos engineering experimentation on a 50-node Kubernetes cluster with synthetic multi-tier microservice traffic loads simulating up to 100,000 requests per second.',
+        algorithms: [
+          'Dynamic Exponential Backoff with Jitter',
+          'Token Bucket Distributed Rate Limiting',
+          'Consensus-driven Health Probing'
+        ],
+        technologies: [
+          'Kubernetes',
+          'Envoy Proxy / Istio Service Mesh',
+          'Docker',
+          'Prometheus Telemetry',
+          'gRPC / HTTP/2'
+        ],
+        datasets: [
+          'Synthetic DeathStarBench Microservice Trace',
+          'Simulated 50-node multi-AZ packet loss dataset'
+        ],
+        experimentalResults: [
+          '42% reduction in P99 tail latency under 15% random packet loss.',
+          '78% decrease in cascading partition failures.',
+          '35% reduction in proxy sidecar memory overhead.'
+        ],
         majorFindings: [
           'Adaptive circuit breakers reduce cascading cascade failures by 78%.',
           'Service mesh sidecar memory footprints can be optimized by 35% through selective route introspection.',
@@ -166,17 +187,49 @@ const runSeed = async () => {
           'Tested primarily on Linux x86 container runtimes; ARM64 multi-architecture overhead was not fully benchmarked.',
           'Requires centralized distributed tracing collector availability.',
         ],
+        conclusion:
+          'Decoupled proxy sidecars combined with dynamic jittered retries prevent catastrophic cascading outages in large-scale Kubernetes deployments with minimal operational overhead.',
         researchGaps: [
           'Autonomous recovery models driven by real-time telemetry remain nascent in production environments.',
         ],
+        researchGapsDetailed: {
+          unresolvedProblems: [
+            'Zero-touch dynamic reconfiguration of sidecar proxies during massive split-brain events without restarting pods.'
+          ],
+          existingApproachLimitations: [
+            'Static circuit-breaker thresholds fail under non-stationary traffic burst distributions.',
+            'Centralized control planes introduce synchronization bottlenecks across multi-region clusters.'
+          ],
+          researchOpportunities: [
+            'In-kernel eBPF packet acceleration for service-mesh traffic filtering.',
+            'Decentralized peer-to-peer circuit state gossiping among edge nodes.'
+          ]
+        },
         futureDirections: [
           'Integrating reinforcement learning models directly into API gateway egress filters for predictive traffic shedding.',
+        ],
+        references: [
+          {
+            title: 'Cloud-native architecture and its patterns: A systematic literature review',
+            authors: 'N. Kratzke, P. Quint',
+            year: 2017,
+            doi: '10.1016/j.sysarc.2017.07.003',
+            raw: '[1] N. Kratzke and P. Quint, "Cloud-native architecture and its patterns: A systematic literature review," Journal of Systems Architecture, vol. 79, pp. 1-18, 2017.'
+          },
+          {
+            title: 'De-architecting: A pattern-based approach to competitive engineering',
+            authors: 'P. Di Francesco, I. Malavolta, P. Lago',
+            year: 2019,
+            doi: '10.1016/j.jss.2019.01.061',
+            raw: '[2] P. Di Francesco et al., "De-architecting: A pattern-based approach to competitive engineering," Journal of Systems and Software, 2019.'
+          }
         ],
         keywords: ['Cloud Computing', 'Fault Tolerance', 'Microservices', 'Kubernetes'],
         importantConcepts: ['Circuit Breaker Pattern', 'Service Mesh', 'Exponential Backoff'],
         relatedTopics: ['Distributed Systems', 'Chaos Engineering', 'Observability'],
         researchDomain: 'Cloud Computing',
         aiProvider: 'verified-seed',
+        isConfigured: true,
       },
     },
     {
@@ -202,6 +255,27 @@ const runSeed = async () => {
           'Construct an end-to-end scientific literature parsing pipeline with sub-second retrieval accuracy and exact source citation anchoring.',
         methodology:
           'FastAPI microservices processing multi-column PDFs with PyMuPDF text stream extraction followed by dense vector embedding generation and hybrid BM25 + dense re-ranking.',
+        algorithms: [
+          'Hybrid BM25 and Vector Similarity Fusion (RRF)',
+          'Hierarchical Section Chunking with Overlap',
+          'Exact Citation Span Alignment'
+        ],
+        technologies: [
+          'PyMuPDF (fitz)',
+          'FastAPI / Python 3.10',
+          'ChromaDB / Vector Indices',
+          'OpenAlex Scholarly Graph API',
+          'Docker Containers'
+        ],
+        datasets: [
+          'arXiv CS & AI Corpus (50,000 papers)',
+          'CORD-19 Benchmark Question-Answering Evaluation Set'
+        ],
+        experimentalResults: [
+          'Sub-second query retrieval (average 420ms latency).',
+          '89% improvement in table and equation retention over baseline OCR.',
+          '94.2% factual attribution verification accuracy on academic benchmarks.'
+        ],
         majorFindings: [
           'Hierarchical PDF text parsing preserves figure and table captions 89% more accurately than standard OCR.',
           'Fact verification scoring improved source attribution confidence to 94.2%.',
@@ -210,17 +284,42 @@ const runSeed = async () => {
         limitations: [
           'High memory consumption during simultaneous batch vectorization of 100+ page monograph documents.',
         ],
+        conclusion:
+          'Coupling C-native PDF text extractors with hybrid sparse-dense retrieval minimizes hallucination and provides verifiable citation trails for academic research discovery platforms.',
         researchGaps: [
           'Cross-lingual scientific literature synthesis remains challenging without fine-tuned multilingual sentence transformers.',
         ],
+        researchGapsDetailed: {
+          unresolvedProblems: [
+            'Preserving mathematical formula semantics and LaTeX equations during text stream extraction from arbitrary PDF font encodings.'
+          ],
+          existingApproachLimitations: [
+            'Standard OCR tools consume excessive CPU and hallucinate character symbols in multi-column research formats.',
+            'Fixed-size text chunking fractures continuous scientific methodologies across arbitrary boundary cuts.'
+          ],
+          researchOpportunities: [
+            'Multi-modal layout transformers that parse scientific charts and inline raster figures simultaneously.',
+            'Decentralized IPFS storage for immutable scholarly document indexing.'
+          ]
+        },
         futureDirections: [
           'Real-time streaming token generation via WebSockets directly to browser research dashboards.',
+        ],
+        references: [
+          {
+            title: 'Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks',
+            authors: 'P. Lewis, E. Perez, et al.',
+            year: 2020,
+            doi: '10.48550/arXiv.2005.11401',
+            raw: '[1] P. Lewis et al., "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks," NeurIPS 2020.'
+          }
         ],
         keywords: ['Artificial Intelligence', 'RAG', 'FastAPI', 'PyMuPDF', 'Information Retrieval'],
         importantConcepts: ['Dense Retrieval', 'Citation Verification', 'Vector Embeddings'],
         relatedTopics: ['Large Language Models', 'Knowledge Graphs', 'Semantic Search'],
         researchDomain: 'Artificial Intelligence',
         aiProvider: 'verified-seed',
+        isConfigured: true,
       },
     },
     {
@@ -246,6 +345,27 @@ const runSeed = async () => {
           'Quantify cryptographic verification latency in edge API Gateways and evaluate memory safety in container isolation.',
         methodology:
           'Synthetic penetration testing and stress evaluation against Node.js Express API Gateways utilizing helmet, rate limits, and short-lived JWT tokens.',
+        algorithms: [
+          'HMAC-SHA256 Stateless Signature Validation',
+          'Sliding Window Request Counter for Rate Limiting',
+          'Role-Based Policy Matrix Traversal'
+        ],
+        technologies: [
+          'Express.js API Gateway',
+          'Helmet.js Security Headers',
+          'JSON Web Tokens (JWT)',
+          'BCrypt Password Hashing',
+          'TLS 1.3'
+        ],
+        datasets: [
+          'OWASP Benchmark Test Suite v1.2',
+          'Synthetic DDoS stress dataset (10,000 concurrent client simulations)'
+        ],
+        experimentalResults: [
+          'Zero unauthorized bypasses across 50,000 simulated privilege escalation attacks.',
+          '68% reduction in authorization verification latency via cryptographic token validation caching.',
+          'Sub-2ms average edge gateway routing overhead under sustained load.'
+        ],
         majorFindings: [
           'Token signature caching on proxy gateways reduces authentication verification overhead by 68%.',
           'Rate limiting effectively neutralizes layer-7 volumetric denial-of-service attempts.',
@@ -253,17 +373,42 @@ const runSeed = async () => {
         limitations: [
           'Token revocation in stateless environments requires distributed blacklist lookups.',
         ],
+        conclusion:
+          'Stateless cryptographic tokens paired with edge gateway rate-limiting establish an impenetrable zero-trust baseline for containerized microservice architectures with negligible performance impact.',
         researchGaps: [
           'Automated anomaly detection in API payload structures without signature maintenance.',
         ],
+        researchGapsDetailed: {
+          unresolvedProblems: [
+            'Immediate stateless token revocation without querying a centralized distributed state store.'
+          ],
+          existingApproachLimitations: [
+            'Static IP whitelisting is ineffective in dynamic container orchestrators where pod IP addresses churn constantly.',
+            'Session replication across microservices degrades horizontal cluster scalability.'
+          ],
+          researchOpportunities: [
+            'Zero-knowledge proof verification at the API Gateway boundary.',
+            'Continuous mutual TLS identity rotation backed by hardware security modules (HSM).'
+          ]
+        },
         futureDirections: [
           'Hardware-accelerated cryptographic token verification for ultra-low latency financial transactions.',
+        ],
+        references: [
+          {
+            title: 'Zero Trust Architecture',
+            authors: 'S. Rose, O. Borchert, et al.',
+            year: 2020,
+            doi: '10.6028/NIST.SP.800-207',
+            raw: '[1] S. Rose et al., "Zero Trust Architecture," NIST Special Publication 800-207, 2020.'
+          }
         ],
         keywords: ['Cybersecurity', 'API Gateway', 'JWT', 'Zero Trust'],
         importantConcepts: ['Stateless Authentication', 'Rate Limiting', 'Defense-in-Depth'],
         relatedTopics: ['Network Security', 'Identity Management', 'Edge Computing'],
         researchDomain: 'Cybersecurity',
         aiProvider: 'verified-seed',
+        isConfigured: true,
       },
     },
   ];
@@ -300,6 +445,10 @@ const runSeed = async () => {
       paper.isAnalyzed = true;
       await paper.save();
       console.log(`Linked AI analysis for: "${paper.title}"`);
+    } else {
+      Object.assign(analysis, p.analysis);
+      await analysis.save();
+      console.log(`Updated AI analysis for: "${paper.title}"`);
     }
 
     // Bookmark the first two papers for the demo user

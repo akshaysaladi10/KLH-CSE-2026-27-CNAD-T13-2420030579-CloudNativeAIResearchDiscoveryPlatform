@@ -1,4 +1,4 @@
-﻿# Dependencies
+# Dependencies
 node_modules/
 **/node_modules/
 venv/
@@ -12,24 +12,25 @@ env/
 __pycache__/
 **/__pycache__/
 *.py[cod]
-*$py.class
+*.class
 .pytest_cache/
 **/.pytest_cache/
 
 # Environment and Secrets (CRITICAL: Never commit real secrets)
 .env
-.env.local
-.env.*.local
-.env.development
-.env.production
+.env.*
+*.env
 !.env.example
+!**/.env.example
 
-# Build Outputs
+# Build Outputs & Deployments
 dist/
 **/dist/
 build/
 **/build/
 *.egg-info/
+.vercel/
+**/.vercel/
 
 # Coverage & Test Logs
 coverage/
@@ -56,10 +57,14 @@ yarn-debug.log*
 # Docker Local Overrides
 docker-compose.override.yml
 
-# Temporary Test PDFs
+# Temporary Test PDFs & Artifacts
 malformed_*.pdf
 sample_cnad_*.pdf
 test_*.pdf
+
+# Binaries & Tunnels
+*.exe
+cloudflared.exe
 
 # Archives
 *.tgz

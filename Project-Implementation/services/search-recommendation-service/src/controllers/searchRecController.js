@@ -215,7 +215,7 @@ const getRelatedPapers = asyncHandler(async (req, res) => {
   const Paper = getPaperModel();
 
   if (!mongoose.Types.ObjectId.isValid(paperId)) {
-    return res.json({ success: true, data: { relatedPapers: [] } });
+    return res.json({ success: true, data: { relatedPapers: [], commonKeywords: [] } });
   }
 
   const currentPaper = await Paper.findById(paperId);
@@ -226,42 +226,99 @@ const getRelatedPapers = asyncHandler(async (req, res) => {
   const currentKeywords = currentPaper.keywords || [];
   const currentDomain = currentPaper.researchDomain || '';
 
-  // Find candidate papers excluding this one
-  const candidates = await Paper.find({
+  // 1. Find candidate papers in local database
+  const searchTerms = currentPaper.title.split(' ').filter(w => w.length > 4).slice(0, 3);
+  const titleRegexes = searchTerms.map(t => new RegExp(t, 'i'));
+
+  const localCandidates = await Paper.find({
     _id: { $ne: currentPaper._id },
     $or: [
       { keywords: { $in: currentKeywords } },
       { researchDomain: currentDomain },
+      ...(titleRegexes.length > 0 ? titleRegexes.map(r => ({ title: r })) : []),
     ],
   })
     .limit(30)
-    .select('title authors publicationYear abstract keywords researchDomain isAnalyzed');
+    .select('title authors publicationYear abstract keywords researchDomain isAnalyzed source externalId doi pdfUrl journal citationCount');
 
-  const scored = candidates.map((candidate) => {
+  let allCandidates = [...localCandidates];
+
+  // 2. If fewer than 6 candidates, query OpenAlex for real scientific related papers
+  if (allCandidates.length < 6) {
+    try {
+      const searchQuery = (currentKeywords.slice(0, 3).join(' ') || currentPaper.title.slice(0, 80)).trim();
+      if (searchQuery) {
+        const openAlexResults = await searchOpenAlex(searchQuery, { page: 1, perPage: 8 });
+        const externalPapers = (openAlexResults.papers || [])
+          .filter((op) => op.title.toLowerCase().trim() !== currentPaper.title.toLowerCase().trim())
+          .map((op) => ({
+            ...op,
+            _id: op.externalId || `openalex_${Math.random().toString(36).substr(2, 9)}`,
+            researchDomain: currentDomain || 'Computer Science',
+            isAnalyzed: false,
+          }));
+        allCandidates.push(...externalPapers);
+      }
+    } catch (oaErr) {
+      logger.warn(`OpenAlex related search fallback: ${oaErr.message}`);
+    }
+  }
+
+  const scored = allCandidates.map((candidate) => {
     let score = 0;
     const similarity = calculateKeywordSimilarity(currentKeywords, candidate.keywords || []);
     score += similarity * 0.7;
 
-    if (candidate.researchDomain && candidate.researchDomain === currentDomain) {
+    if (candidate.researchDomain && currentDomain && candidate.researchDomain.toLowerCase() === currentDomain.toLowerCase()) {
       score += 0.3;
     }
 
+    const sharedKeywords = (candidate.keywords || []).filter((k) =>
+      currentKeywords.map((ck) => ck.toLowerCase()).includes(k.toLowerCase())
+    );
+
     return {
       paper: candidate,
-      score: Math.round(score * 100) / 100,
-      sharedKeywords: (candidate.keywords || []).filter((k) =>
-        currentKeywords.map((ck) => ck.toLowerCase()).includes(k.toLowerCase())
-      ),
+      score: Math.min(1, Math.round(score * 100) / 100),
+      sharedKeywords,
+      matchReason: sharedKeywords.length > 0
+        ? `Overlapping topics: ${sharedKeywords.slice(0, 3).join(', ')}`
+        : (candidate.researchDomain === currentDomain ? 'Domain alignment' : 'Scholarly topic similarity'),
     };
   });
 
   scored.sort((a, b) => b.score - a.score);
-  const relatedPapers = scored.slice(0, 6);
+
+  // Deduplicate by title
+  const seenTitles = new Set();
+  const uniqueRelated = [];
+  for (const s of scored) {
+    const titleKey = (s.paper.title || '').toLowerCase().trim();
+    if (titleKey && !seenTitles.has(titleKey)) {
+      seenTitles.add(titleKey);
+      uniqueRelated.push(s);
+    }
+    if (uniqueRelated.length >= 8) break;
+  }
+
+  // Extract common keywords across all related papers
+  const allRelatedKw = uniqueRelated.flatMap((r) => r.paper.keywords || []);
+  const kwCounts = {};
+  allRelatedKw.forEach((k) => {
+    if (!k) return;
+    const key = k.charAt(0).toUpperCase() + k.slice(1).toLowerCase();
+    kwCounts[key] = (kwCounts[key] || 0) + 1;
+  });
+  const commonKeywords = Object.entries(kwCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([keyword, count]) => ({ keyword, count }));
 
   res.json({
     success: true,
     data: {
-      relatedPapers,
+      relatedPapers: uniqueRelated,
+      commonKeywords,
       basePaperId: paperId,
     },
   });

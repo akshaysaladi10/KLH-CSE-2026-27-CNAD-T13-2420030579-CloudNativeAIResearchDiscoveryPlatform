@@ -1,0 +1,37 @@
+FROM node:20-alpine
+
+# Install Python3, pip, and native build dependencies for PyMuPDF
+RUN apk add --no-cache python3 py3-pip build-base python3-dev mupdf-dev
+
+WORKDIR /app
+
+# Copy shared modules
+COPY shared ./shared
+
+# Install Python requirements
+COPY services/pdf-service/requirements.txt ./pdf-reqs.txt
+COPY services/ai-service/requirements.txt ./ai-reqs.txt
+RUN pip install --no-cache-dir --break-system-packages -r pdf-reqs.txt -r ai-reqs.txt
+
+# Install Node service dependencies
+COPY api-gateway/package*.json ./api-gateway/
+RUN cd api-gateway && npm install --production
+
+COPY services/auth-service/package*.json ./services/auth-service/
+RUN cd services/auth-service && npm install --production
+
+COPY services/paper-service/package*.json ./services/paper-service/
+RUN cd services/paper-service && npm install --production
+
+COPY services/search-recommendation-service/package*.json ./services/search-recommendation-service/
+RUN cd services/search-recommendation-service && npm install --production
+
+# Copy application source code
+COPY api-gateway ./api-gateway
+COPY services ./services
+COPY scripts/start-all-services.sh ./scripts/start-all-services.sh
+RUN chmod +x ./scripts/start-all-services.sh
+
+EXPOSE 3000
+
+CMD ["./scripts/start-all-services.sh"]

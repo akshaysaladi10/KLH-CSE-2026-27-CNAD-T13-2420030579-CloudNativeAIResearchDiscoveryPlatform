@@ -8,6 +8,12 @@ const paperSchema = new mongoose.Schema(
       trim: true,
       maxlength: 500,
     },
+    subtitle: {
+      type: String,
+      default: '',
+      trim: true,
+      maxlength: 500,
+    },
     authors: [
       {
         name: { type: String, required: true },
@@ -25,6 +31,11 @@ const paperSchema = new mongoose.Schema(
       max: 2100,
     },
     journal: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    publisher: {
       type: String,
       default: '',
       trim: true,
@@ -63,6 +74,39 @@ const paperSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    pageCount: {
+      type: Number,
+      default: 0,
+    },
+    fileSize: {
+      type: Number,
+      default: 0,
+    },
+    isRead: {
+      type: Boolean,
+      default: false,
+    },
+    readAt: {
+      type: Date,
+      default: null,
+    },
+    userNotes: {
+      type: String,
+      default: '',
+      maxlength: 5000,
+    },
+    highlights: {
+      type: [String],
+      default: [],
+    },
+    viewCount: {
+      type: Number,
+      default: 0,
+    },
+    lastViewedAt: {
+      type: Date,
+      default: null,
+    },
     citationCount: {
       type: Number,
       default: 0,
@@ -85,6 +129,15 @@ const paperSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       default: null,
     },
+    references: [
+      {
+        title: { type: String, default: '' },
+        authors: { type: String, default: '' },
+        year: { type: Number },
+        doi: { type: String, default: '' },
+        raw: { type: String, default: '' },
+      },
+    ],
   },
   {
     timestamps: true,

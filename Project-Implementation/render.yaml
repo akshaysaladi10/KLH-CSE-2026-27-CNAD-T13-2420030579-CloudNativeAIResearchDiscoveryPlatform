@@ -1,0 +1,156 @@
+services:
+  # ── Public API Gateway ──
+  - type: web
+    name: cnad-api-gateway
+    runtime: docker
+    dockerfilePath: api-gateway/Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: FRONTEND_URL
+        value: https://*.vercel.app
+      - key: AUTH_SERVICE_URL
+        fromService:
+          type: pserv
+          name: cnad-auth-service
+          property: host
+      - key: PAPER_SERVICE_URL
+        fromService:
+          type: pserv
+          name: cnad-paper-service
+          property: host
+      - key: SEARCH_REC_SERVICE_URL
+        fromService:
+          type: pserv
+          name: cnad-search-recommendation-service
+          property: host
+      - key: PDF_SERVICE_URL
+        fromService:
+          type: pserv
+          name: cnad-pdf-service
+          property: host
+      - key: AI_SERVICE_URL
+        fromService:
+          type: pserv
+          name: cnad-ai-service
+          property: host
+
+  # ── Internal Auth Microservice ──
+  - type: pserv
+    name: cnad-auth-service
+    runtime: docker
+    dockerfilePath: services/auth-service/Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+
+  # ── Internal Paper Microservice ──
+  - type: pserv
+    name: cnad-paper-service
+    runtime: docker
+    dockerfilePath: services/paper-service/Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3002
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: MINIO_ENDPOINT
+        sync: false
+      - key: MINIO_PORT
+        value: "443"
+      - key: MINIO_ACCESS_KEY
+        sync: false
+      - key: MINIO_SECRET_KEY
+        sync: false
+      - key: MINIO_BUCKET
+        value: research-papers
+      - key: PDF_SERVICE_URL
+        fromService:
+          type: pserv
+          name: cnad-pdf-service
+          property: host
+      - key: AI_SERVICE_URL
+        fromService:
+          type: pserv
+          name: cnad-ai-service
+          property: host
+
+  # ── Internal Search & Recommendation Microservice ──
+  - type: pserv
+    name: cnad-search-recommendation-service
+    runtime: docker
+    dockerfilePath: services/search-recommendation-service/Dockerfile
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3003
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+
+  # ── Internal PyMuPDF PDF Service (Python) ──
+  - type: pserv
+    name: cnad-pdf-service
+    runtime: docker
+    dockerfilePath: services/pdf-service/Dockerfile
+    envVars:
+      - key: PORT
+        value: 8001
+      - key: PAPER_SERVICE_URL
+        fromService:
+          type: pserv
+          name: cnad-paper-service
+          property: host
+      - key: AI_SERVICE_URL
+        fromService:
+          type: pserv
+          name: cnad-ai-service
+          property: host
+      - key: MINIO_ENDPOINT
+        sync: false
+      - key: MINIO_PORT
+        value: "443"
+      - key: MINIO_ACCESS_KEY
+        sync: false
+      - key: MINIO_SECRET_KEY
+        sync: false
+      - key: MINIO_BUCKET
+        value: research-papers
+
+  # ── Internal AI Synthesis Service (Python) ──
+  - type: pserv
+    name: cnad-ai-service
+    runtime: docker
+    dockerfilePath: services/ai-service/Dockerfile
+    envVars:
+      - key: PORT
+        value: 8002
+      - key: PAPER_SERVICE_URL
+        fromService:
+          type: pserv
+          name: cnad-paper-service
+          property: host
+      - key: AI_API_KEY
+        sync: false
+      - key: AI_BASE_URL
+        value: https://api.openai.com/v1
+      - key: AI_MODEL
+        value: gpt-4o-mini

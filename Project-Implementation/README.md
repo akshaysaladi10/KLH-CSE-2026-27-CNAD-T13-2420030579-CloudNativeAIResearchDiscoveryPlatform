@@ -73,20 +73,30 @@ The platform adheres to cloud-native microservice decoupling principles, contain
 ## 2. Key Features
 
 1. **Dual-Mode Document Intake Pipeline:**
-   - **Full PDF Upload:** Binary PDF stream sent through Gateway -> MinIO S3 -> PyMuPDF text parser -> Scientific AI Analysis -> MongoDB record update.
+   - **Full PDF Upload:** Binary PDF stream sent through Gateway -> MinIO S3 -> PyMuPDF text parser -> Scientific AI Analysis -> MongoDB record update with interactive drag-and-drop validation.
    - **Direct Abstract Submission:** Quick input mode for immediate AI decomposition without requiring a pre-compiled PDF document.
-2. **Structural Scientific AI Analysis:**
-   - Automatic extraction of: *Research Problem, Methodology, Key Findings, Limitations, and Research Gaps*.
-   - Offline-capable scientific NLP heuristics ensure zero downtime and zero billing dependencies during demonstrations.
-3. **Hybrid Literature Discovery:**
-   - Real-time search across OpenAlex's 250M+ scholarly records.
-   - Built-in resilience fallback to internal MongoDB index when offline or rate-limited.
-4. **Contextual Recommendations:**
-   - Jaccard similarity index across author keyword graphs and extracted terminology.
-5. **Robust Error Handling:**
-   - Corrupted or truncated PDFs are caught safely without container failure.
-   - Scanned/image-only PDFs are tagged as `completed_without_ai` with helpful guidance.
-   - PDF streaming endpoint streams binary data safely to browser iframe viewers.
+2. **Interactive Research AI Dashboard:**
+   - Multi-metric platform analytics (total literature cataloged, AI analyses synthesized, active collections, domain distribution).
+   - Dynamic quick-action command hub, recent discovery timelines, and system operational telemetry.
+3. **Structural Scientific AI Analysis & Paper Details:**
+   - Automatic extraction of: *Executive Summary, Problem Statement, Methodology, Quantitative Findings, Limitations, and Open Research Gaps*.
+   - Tabbed scholarly workspace featuring high-contrast metrics, methodology architecture, and integrated PDF preview.
+4. **Scholarly Citations Generator & Modal:**
+   - Instant academic citations across **APA 7th, MLA 9th, Chicago 17th, Harvard, BibTeX, and RIS** styles with one-click clipboard copy.
+5. **AI Research Gap Explorer & Opportunity Matrix:**
+   - Cross-paper gap synthesis mapping unexplored questions, methodological vulnerabilities, and emerging opportunities in each research domain.
+6. **Literature Comparison Tool & Workspaces:**
+   - Side-by-side comparative analysis of multiple research papers across methodology, sample sizes, and findings.
+7. **Personal Research Library, Collections & Reading History:**
+   - Hierarchical collection organization, one-click bookmarking, reading status tracking, and chronological history.
+8. **Hybrid Literature Discovery & Semantic Search:**
+   - Real-time discovery across OpenAlex (250M+ scholarly records) with seamless local database fallback.
+   - Contextual recommendation engine using Jaccard similarity indexing across academic concepts.
+9. **White-Screen & Render Resiliency Protection:**
+   - React ErrorBoundary wrapper preventing client crashes on partial schemas or transient API errors.
+10. **Cloud-Native Production Deployability:**
+   - Multi-tier cloud deployment ready with 
+ender.yaml (Render Web Services), Dockerfile.backend, and ercel.json SPA routing.
 
 ---
 
@@ -222,15 +232,27 @@ npm run build
 ```
 *Expected Result: Vite transforms modules and outputs optimized production assets in `dist/`.*
 
-### Running Automated Integration / End-to-End Tests
-While the Docker containers are running (`docker compose up -d`):
-```bash
+### Running Automated Integration & Verification Suites
+While the Docker containers or local development servers are running:
+`ash
 # Verify PDF upload flow and MinIO S3 integration:
 python verify_upload.py
 
 # Comprehensive end-to-end suite verifying all gateway endpoints:
 python test_e2e.py
-```
+
+# End-to-end validation of AI Research Gap analysis pipeline:
+python verify_gap_analysis_workflow.py
+
+# Frontend ErrorBoundary and resilient rendering verification:
+python test_white_screen_fix.py
+
+# Public API Gateway and CORS health check:
+python test_public_gateway.py
+
+# Production Vercel live frontend & API integration check:
+python test_vercel_live.py
+`
 
 ---
 
