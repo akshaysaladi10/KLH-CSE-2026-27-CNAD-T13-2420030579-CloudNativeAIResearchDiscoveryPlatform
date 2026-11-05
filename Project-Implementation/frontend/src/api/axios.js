@@ -1,7 +1,16 @@
 import axios from 'axios';
 
-const rawBaseURL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-const baseURL = rawBaseURL.replace(/^\uFEFF/, '').trim();
+// In development, target the local Docker API Gateway (http://localhost:3000)
+// In production (Vercel), target same-origin ('') so requests always hit /api on the Vercel domain
+const isDev = import.meta.env.DEV;
+const rawBase = import.meta.env.VITE_API_URL;
+
+let baseURL = '';
+if (isDev) {
+  baseURL = 'http://localhost:3000';
+} else if (rawBase && !rawBase.includes('trycloudflare.com') && rawBase.startsWith('http')) {
+  baseURL = rawBase.replace(/\/api\/?$/, '').replace(/\/+$/, '');
+}
 
 const api = axios.create({
   baseURL,
@@ -11,6 +20,12 @@ const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
+  // Guarantee that every relative request is routed through /api/...
+  if (config.url && !config.url.startsWith('http')) {
+    const cleanPath = config.url.replace(/^\/api/, '').replace(/^\/+/, '');
+    config.url = `/api/${cleanPath}`;
+  }
+
   const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -22,7 +37,6 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // If unauthorized and not already on auth pages, clear stale credentials
       const currentPath = window.location.pathname;
       if (currentPath !== '/login' && currentPath !== '/register') {
         localStorage.removeItem('token');
