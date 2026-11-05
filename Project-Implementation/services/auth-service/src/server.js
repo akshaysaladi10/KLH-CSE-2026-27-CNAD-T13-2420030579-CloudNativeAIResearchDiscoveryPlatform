@@ -13,8 +13,7 @@ const logger = createLogger('auth-service');
 const PORT = process.env.AUTH_PORT || 3001;
 
 // Middleware
-app.use(helmet());
-app.use(cors());
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(express.json());
 app.use(morgan('combined', {
   stream: { write: (message) => logger.info(message.trim()) },

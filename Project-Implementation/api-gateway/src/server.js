@@ -117,6 +117,16 @@ const createProxy = (target, prefix = '') => {
         fixRequestBody(proxyReq, req);
         logger.debug(`Proxying ${req.method} ${req.originalUrl} → ${target}`);
       },
+      proxyRes: (proxyRes, req, res) => {
+        const origin = req.headers.origin;
+        if (origin) {
+          proxyRes.headers['access-control-allow-origin'] = origin;
+          proxyRes.headers['access-control-allow-credentials'] = 'true';
+          proxyRes.headers['access-control-allow-methods'] = 'GET,POST,PUT,DELETE,PATCH,OPTIONS';
+          proxyRes.headers['access-control-allow-headers'] = 'Content-Type,Authorization';
+        }
+        proxyRes.headers['cross-origin-resource-policy'] = 'cross-origin';
+      },
       error: (err, req, res) => {
         logger.error(`Proxy error: ${err.message}`, { target, path: req.originalUrl });
         res.status(502).json({

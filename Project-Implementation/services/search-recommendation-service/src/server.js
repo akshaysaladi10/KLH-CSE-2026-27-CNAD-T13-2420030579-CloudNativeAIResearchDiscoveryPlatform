@@ -12,8 +12,7 @@ const app = express();
 const logger = createLogger('search-rec-service');
 const PORT = process.env.SEARCH_REC_PORT || 3003;
 
-app.use(helmet());
-app.use(cors());
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(express.json());
 app.use(morgan('combined', { stream: { write: (message) => logger.info(message.trim()) } }));
 
