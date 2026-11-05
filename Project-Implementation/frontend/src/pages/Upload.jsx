@@ -108,7 +108,7 @@ export default function Upload() {
       });
 
       if (res.data.success) {
-        const paperId = res.data.data.paper._id;
+        const paperId = res.data.data.paper?._id || res.data.data._id || res.data.data.paper?.id || res.data.data.id;
         setUploadStep(2); // PyMuPDF text stream extraction
 
         setTimeout(() => {
@@ -155,7 +155,7 @@ export default function Upload() {
       });
 
       if (res.data.success) {
-        const paperId = res.data.data.paper._id;
+        const paperId = res.data.data.paper?._id || res.data.data._id || res.data.data.paper?.id || res.data.data.id;
         setUploadStep(2); // AI Analysis processing
 
         setTimeout(() => {

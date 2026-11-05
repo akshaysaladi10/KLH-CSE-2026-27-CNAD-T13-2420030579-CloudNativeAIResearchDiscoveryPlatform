@@ -28,7 +28,7 @@ async function runProductionVerification() {
 
   page.on('response', async (res) => {
     let txt = '';
-    try { txt = await res.text(); } catch (e) {}
+    try { txt = await res.text(); } catch (e) { }
     console.log(`[RESPONSE ${res.status()}] ${res.request().method()} ${res.url()} -> ${txt.slice(0, 150)}`);
   });
 
